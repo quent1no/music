@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Synchronized Radio</title>
+  <style>
+    :root {
+      --bg: #0f1221;
+      --panel: #161a2f;
+      --panel-2: #1e2340;
+      --text: #e6e9ff;
+      --muted: #a9b0d4;
+      --accent: #7c8cff;
+      --accent-2: #55e1b7;
+      --danger: #ff4d6d;
+      --shadow: 0 10px 25px rgba(0,0,0,.35);
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: radial-gradient(1000px 600px at 80% -10%, rgba(124,140,255,.25), transparent 60%),
+                  radial-gradient(800px 500px at -10% 110%, rgba(85,225,183,.18), transparent 60%),
+                  var(--bg);
+      color: var(--text);
+      font: 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .card {
+      width: min(860px, 92vw);
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.06);
+    }
+    header {
+      padding: 20px 22px 12px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .title {
+      font-size: clamp(18px, 2.6vw, 26px);
+      font-weight: 700;
+      letter-spacing: .2px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .live {
+      display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #fff;
+      background: linear-gradient(135deg, var(--danger), #ff8aa3);
+      padding: 6px 10px; border-radius: 999px; box-shadow: var(--shadow);
+    }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: pulse 1.2s infinite; }
+    @keyframes pulse { 0%{opacity:.6; transform:scale(.9)} 50%{opacity:1; transform:scale(1.1)} 100%{opacity:.6; transform:scale(.9)} }
+
+    .meta { color: var(--muted); font-size: 13px; }
+
+    .controls { display: grid; gap: 14px; padding: 8px 22px 22px; }
+    .row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+    button, input[type="range"] { accent-color: var(--accent); }
+    .btn {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: #202653; border: 1px solid rgba(255,255,255,.08);
+      color: var(--text); padding: 10px 14px; border-radius: 14px;
+      cursor: pointer; transition: transform .05s ease, filter .2s ease, background .2s ease;
+      user-select: none;
+    }
+    .btn:hover { filter: brightness(1.08); }
+    .btn:active { transform: translateY(1px); }
+    .btn.secondary { background: #1b2044; }
+
+    .time { font-variant-numeric: tabular-nums; color: var(--muted); }
+
+    .progress {
+      --h: 10px;
+      position: relative; width: 100%; height: var(--h); background: rgba(255,255,255,.08);
+      border-radius: 999px; overflow: hidden; border: 1px solid rgba(255,255,255,.06);
+    }
+    .bar { position: absolute; inset: 0; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+
+    .volume { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+    .volume input { width: min(200px, 35vw); }
+
+    footer { padding: 14px 22px 22px; color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    code { background: rgba(255,255,255,.08); padding: 3px 6px; border-radius: 8px; border: 1px solid rgba(255,255,255,.06); }
+
+    /* Overlay for autoplay prompt */
+    .overlay {
+      position: fixed; inset: 0; display: none; place-items: center; background: rgba(8,10,20,.7);
+      backdrop-filter: blur(6px);
+    }
+    .overlay .inner {
+      width: min(520px, 92vw); text-align: center; background: var(--panel-2);
+      border: 1px solid rgba(255,255,255,.08); border-radius: var(--radius); padding: 28px; box-shadow: var(--shadow);
+    }
+    .overlay h2 { margin: 0 0 6px; font-size: 22px; }
+    .overlay p { margin: 0 0 16px; color: var(--muted); }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="card" role="region" aria-label="Synchronized Radio Player">
+    <header>
+      <div class="title">
+        <span id="stationTitle">Synchronized Radio</span>
+        <span class="live"><span class="live-dot"></span> LIVE</span>
+      </div>
+      <div class="meta">
+        <span id="fileName">audio.mp3</span>
+      </div>
+    </header>
+
+    <div class="controls">
+      <div class="progress" aria-hidden="true" title="Progress (read-only; syncs to live)">
+        <div class="bar" id="bar"></div>
+      </div>
+
+      <div class="row">
+        <button class="btn" id="playBtn" aria-label="Play/Pause">▶ Play</button>
+        <button class="btn secondary" id="muteBtn" aria-label="Mute/Unmute">🔊 Mute</button>
+        <div class="time" id="timeReadout">00:00 / 00:00</div>
+        <div class="volume">
+          <span>Vol</span>
+          <input id="vol" type="range" min="0" max="1" step="0.01" value="1" aria-label="Volume" />
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div>
+        Synced by UTC clock. Epoch: <span id="epochText"></span>
+      </div>
+      <div>
+        Change file or title via query: <code>?src=music.mp3&title=My%20Show</code>
+      </div>
+    </footer>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="inner">
+      <h2>Tap to start the radio</h2>
+      <p>Your browser blocks autoplay with sound. Click below to start playback.</p>
+      <button class="btn" id="startBtn">▶ Start</button>
+    </div>
+  </div>
+
+  <audio id="audio" preload="auto" crossorigin></audio>
+
+  <script>
+    (function() {
+      const params = new URLSearchParams(location.search);
+      const src = params.get('src') || 'audio.mp3';
+      const providedTitle = params.get('title');
+      const epochParam = params.get('epoch'); // ISO string or unix seconds
+      const EPOCH_MS = (function(){
+        if (!epochParam) return Date.UTC(2025,0,1,0,0,0); // Jan 1, 2025 UTC default
+        const n = Number(epochParam);
+        if (!Number.isNaN(n) && n > 1000000000) return n * (n < 1e12 ? 1000 : 1); // seconds or ms
+        const t = Date.parse(epochParam);
+        return Number.isNaN(t) ? Date.UTC(2025,0,1,0,0,0) : t;
+      })();
+
+      const audio = document.getElementById('audio');
+      const playBtn = document.getElementById('playBtn');
+      const muteBtn = document.getElementById('muteBtn');
+      const timeReadout = document.getElementById('timeReadout');
+      const bar = document.getElementById('bar');
+      const vol = document.getElementById('vol');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('startBtn');
+      const stationTitle = document.getElementById('stationTitle');
+      const fileName = document.getElementById('fileName');
+      const epochText = document.getElementById('epochText');
+
+      stationTitle.textContent = providedTitle || 'Synchronized Radio';
+      fileName.textContent = src;
+      epochText.textContent = new Date(EPOCH_MS).toISOString().replace('T',' ').replace('Z',' UTC');
+
+      audio.src = src;
+      audio.loop = true; // we'll still correct drift periodically
+      audio.playsInline = true;
+
+      // UI Helpers
+      const fmt = s => {
+        s = Math.max(0, s|0);
+        const m = (s/60)|0, r = s%60;
+        return `${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
+      };
+      function updateButtons() {
+        playBtn.textContent = (audio.paused ? '▶ Play' : '⏸ Pause');
+        muteBtn.textContent = (audio.muted ? '🔇 Unmute' : '🔊 Mute');
+      }
+
+      // Sync logic
+      let duration = 0;
+      let userInteracted = false;
+      const MAX_CORRECTION = 0.25; // seconds tolerance before we jump
+
+      function expectedPosition(nowMs) {
+        const now = (nowMs ?? Date.now());
+        if (!duration || !Number.isFinite(duration)) return 0;
+        let pos = ((now - EPOCH_MS) / 1000) % duration;
+        if (pos < 0) pos += duration;
+        return pos;
+      }
+
+      function syncToExpected(force=false) {
+        if (!duration) return;
+        const exp = expectedPosition();
+        const diff = Math.abs(audio.currentTime - exp);
+        if (force || diff > MAX_CORRECTION) {
+          try { audio.currentTime = exp; } catch {}
+        }
+        if (!audio.paused && audio.readyState >= 2) {
+          // keep progress UI smooth
+          renderProgress();
+        }
+      }
+
+      function renderProgress() {
+        if (!duration) return;
+        const t = audio.currentTime;
+        const pct = Math.max(0, Math.min(100, (t / duration) * 100));
+        bar.style.width = pct + '%';
+        timeReadout.textContent = `${fmt(t)} / ${fmt(duration)}`;
+      }
+
+      // Attempt autoplay. Many browsers require user gesture; fall back to overlay.
+      async function tryAutoplay() {
+        audio.muted = true;
+        try {
+          await audio.play();
+          // after starting muted, unmute quickly if user didn't explicitly mute
+          setTimeout(()=>{ if (!userInteracted) audio.muted = false; updateButtons(); }, 100);
+          updateButtons();
+        } catch (e) {
+          overlay.style.display = 'grid';
+        }
+      }
+
+      // When metadata is known, compute duration and force an initial sync
+      audio.addEventListener('loadedmetadata', () => {
+        duration = Math.floor(audio.duration || 0);
+        if (!duration || !Number.isFinite(duration)) {
+          // Try again on canplay
+          return;
+        }
+        syncToExpected(true);
+        renderProgress();
+        tryAutoplay();
+      });
+
+      audio.addEventListener('timeupdate', renderProgress);
+      audio.addEventListener('play', updateButtons);
+      audio.addEventListener('pause', updateButtons);
+
+      // Buttons
+      playBtn.addEventListener('click', async () => {
+        userInteracted = true;
+        if (audio.paused) {
+          syncToExpected(true);
+          try { await audio.play(); } catch {}
+        } else {
+          audio.pause();
+        }
+        updateButtons();
+      });
+
+      muteBtn.addEventListener('click', () => {
+        userInteracted = true;
+        audio.muted = !audio.muted;
+        updateButtons();
+      });
+
+      startBtn.addEventListener('click', async () => {
+        userInteracted = true;
+        overlay.style.display = 'none';
+        syncToExpected(true);
+        try { await audio.play(); } catch {}
+        updateButtons();
+      });
+
+      vol.addEventListener('input', () => {
+        audio.volume = Number(vol.value);
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          setTimeout(() => syncToExpected(true), 50);
+        }
+      });
+
+      // Periodic drift correction
+      setInterval(() => syncToExpected(false), 5000);
+
+      // Kick things off if metadata was already available
+      if (audio.readyState >= 1) {
+        duration = Math.floor(audio.duration || 0);
+        if (duration) { syncToExpected(true); tryAutoplay(); }
+      }
+    })();
+  </script>
+</body>
+</html>
